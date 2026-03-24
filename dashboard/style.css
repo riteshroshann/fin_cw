@@ -1,0 +1,207 @@
+:root {
+    --bg-color: #050505;
+    --glass-bg: rgba(20, 20, 25, 0.4);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --accent-1: #6EE7B7;
+    --accent-2: #3B82F6;
+    --accent-3: #9333EA;
+    --text-primary: #F3F4F6;
+    --text-secondary: #9CA3AF;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-primary);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+}
+
+/* Background Animated Blobs */
+.blob {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(120px);
+    z-index: -1;
+    opacity: 0.6;
+    animation: drift 20s infinite alternate ease-in-out;
+}
+
+.blob-1 {
+    width: 600px;
+    height: 600px;
+    background: linear-gradient(135deg, rgba(147, 51, 234, 0.3), rgba(59, 130, 246, 0.3));
+    top: -100px;
+    left: -100px;
+}
+
+.blob-2 {
+    width: 500px;
+    height: 500px;
+    background: linear-gradient(135deg, rgba(110, 231, 183, 0.2), rgba(59, 130, 246, 0.2));
+    bottom: -100px;
+    right: -100px;
+    animation-delay: -5s;
+}
+
+@keyframes drift {
+    0% { transform: translate(0, 0) scale(1); }
+    100% { transform: translate(50px, 50px) scale(1.1); }
+}
+
+.dashboard {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 3rem 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 3rem;
+}
+
+header.hero {
+    text-align: left;
+    margin-bottom: 1rem;
+    animation: fadeUp 0.8s ease-out;
+}
+
+h1 {
+    font-family: 'Outfit', sans-serif;
+    font-size: 3rem;
+    line-height: 1.2;
+    margin-bottom: 0.5rem;
+}
+
+.gradient-text {
+    background: linear-gradient(90deg, #6EE7B7, #3B82F6, #9333EA);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    display: inline-block;
+}
+
+.subtitle {
+    font-size: 1.2rem;
+    color: var(--text-secondary);
+    font-weight: 300;
+}
+
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+}
+
+.glass-card {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+    padding: 1.5rem;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    transition: transform 0.3s ease, border-color 0.3s ease;
+    animation: fadeUp 0.8s ease-out backwards;
+}
+
+.glass-card:hover {
+    transform: translateY(-5px);
+    border-color: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+
+.kpi-title {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+}
+
+.kpi-value {
+    font-size: 2.5rem;
+    font-family: 'Outfit', sans-serif;
+    font-weight: 700;
+    color: #fff;
+}
+
+.kpi-sub {
+    font-size: 0.85rem;
+    color: var(--accent-1);
+    margin-top: 0.25rem;
+}
+.kpi-sub.critical {
+    color: #F87171;
+}
+
+.visuals {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    grid-auto-rows: 20px;
+    gap: 1.5rem;
+}
+
+.img-card {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    animation: fadeUp 0.8s ease-out backwards;
+    transition: transform 0.3s ease;
+}
+.img-card:hover { 
+    transform: scale(1.02);
+    box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+    z-index: 10;
+}
+
+.img-header {
+    padding: 1rem;
+    border-bottom: 1px solid var(--glass-border);
+    font-weight: 500;
+    font-size: 1rem;
+    font-family: 'Outfit', sans-serif;
+    background: rgba(0,0,0,0.2);
+}
+
+.img-container {
+    padding: 1rem;
+    flex-grow: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.img-container img {
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+    border-radius: 8px;
+    filter: brightness(0.9) contrast(1.1);
+}
+
+/* Base masonry sizing */
+.span-full { grid-column: span 12; grid-row: span 30; }
+.span-half { grid-column: span 6; grid-row: span 22; }
+.span-third { grid-column: span 4; grid-row: span 18; }
+
+@keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 1024px) {
+    .span-half { grid-column: span 12; }
+    .span-third { grid-column: span 6; }
+}
+@media (max-width: 768px) {
+    .span-third { grid-column: span 12; }
+}
