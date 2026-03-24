@@ -1,0 +1,187 @@
+{
+  "pipeline_timing": {
+    "hankel_ssa_s": 0.4365,
+    "admm_rpca_s": 0.0577,
+    "dmd_s": 0.0014,
+    "stat_tests_s": 0.1228,
+    "granger_s": 0.1356,
+    "rebalance_s": 0.0002,
+    "total_s": 0.7542
+  },
+  "admm": {
+    "iterations": 300,
+    "final_primal_residual": 1.1319246210425964e-08,
+    "final_dual_residual": 0.00033636554102843156,
+    "final_rank": 8
+  },
+  "dmd_stability": {
+    "spectral_radius": 0.98404,
+    "dominant_frequency_hz": 0.0,
+    "n_stable": 7,
+    "n_marginal": 1,
+    "n_unstable": 0
+  },
+  "reconstruction": {
+    "rmse": 32.794055,
+    "ci_lo": 31.594099,
+    "ci_hi": 33.966219,
+    "alpha": 0.05
+  },
+  "normality_test": {
+    "test": "Jarque-Bera",
+    "statistic": 3165.88,
+    "p_value": 0.0,
+    "reject_null": true,
+    "detail": "skew=1.9511, kurtosis=1.8230"
+  },
+  "anomalies": {
+    "n_detected": 91,
+    "alpha": 0.05,
+    "correction": "Benjamini-Hochberg"
+  },
+  "granger_network": {
+    "n_edges": 0,
+    "n_nodes": 8,
+    "strongest_f_stat": 4.342,
+    "strongest_pair": [
+      5,
+      4
+    ],
+    "adjacency": [
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    ]
+  },
+  "portfolio": {
+    "weights": [
+      0.046265,
+      0.0,
+      0.0,
+      0.0,
+      0.081996,
+      0.444187,
+      0.0,
+      0.427553
+    ],
+    "sum": 1.0
+  },
+  "backtest": {
+    "n_windows": 5,
+    "mean_rmse": 29.475426,
+    "std_rmse": 1.887661,
+    "worst_rmse": 32.857123,
+    "best_rmse": 27.394182,
+    "overfit_ratio": 0.8661,
+    "per_window": [
+      32.857123,
+      27.394182,
+      28.882895,
+      29.972107,
+      28.27082
+    ]
+  },
+  "reconstruction_per_asset_rmse": {
+    "SYN0": 35.370011,
+    "SYN1": 31.06531,
+    "SYN2": 31.991031,
+    "SYN3": 33.710685,
+    "SYN4": 30.03871,
+    "SYN5": 33.520422,
+    "SYN6": 33.483518,
+    "SYN7": 32.998982
+  },
+  "overall_rmse": 32.772334,
+  "data_config": {
+    "source": "Synthetic",
+    "n_assets": 8,
+    "T": 512,
+    "asset_names": [
+      "SYN0",
+      "SYN1",
+      "SYN2",
+      "SYN3",
+      "SYN4",
+      "SYN5",
+      "SYN6",
+      "SYN7"
+    ]
+  }
+}
