@@ -1,174 +1,234 @@
 {
   "pipeline_timing": {
-    "hankel_ssa_s": 0.4365,
-    "admm_rpca_s": 0.0577,
-    "dmd_s": 0.0014,
-    "stat_tests_s": 0.1228,
-    "granger_s": 0.1356,
-    "rebalance_s": 0.0002,
-    "total_s": 0.7542
+    "hankel_ssa_s": 1.1544,
+    "admm_rpca_s": 1.7315,
+    "dmd_s": 0.0016,
+    "stat_tests_s": 10.4322,
+    "granger_s": 0.0529,
+    "rebalance_s": 0.0003,
+    "total_s": 13.3729
+  },
+  "iterative_coupling": {
+    "outer_iterations": 3,
+    "deltas": [
+      63303123407702.64,
+      0.009279,
+      0.005533
+    ],
+    "converged": false
   },
   "admm": {
     "iterations": 300,
-    "final_primal_residual": 1.1319246210425964e-08,
-    "final_dual_residual": 0.00033636554102843156,
-    "final_rank": 8
+    "final_primal_residual": 4.389736237902569e-06,
+    "final_dual_residual": 1.4011152355976193e-05,
+    "final_rank": 2
   },
   "dmd_stability": {
-    "spectral_radius": 0.98404,
+    "spectral_radius": 0.986832,
     "dominant_frequency_hz": 0.0,
     "n_stable": 7,
     "n_marginal": 1,
     "n_unstable": 0
   },
   "reconstruction": {
-    "rmse": 32.794055,
-    "ci_lo": 31.594099,
-    "ci_hi": 33.966219,
+    "rmse": 3.267873,
+    "ci_lo": 2.974912,
+    "ci_hi": 3.575343,
     "alpha": 0.05
+  },
+  "bias_variance": {
+    "mse": 10.678996,
+    "bias_squared": 2.702857,
+    "variance": 0.001706,
+    "rmse": 3.267873
   },
   "normality_test": {
     "test": "Jarque-Bera",
-    "statistic": 3165.88,
+    "statistic": 427266.7707,
     "p_value": 0.0,
     "reject_null": true,
-    "detail": "skew=1.9511, kurtosis=1.8230"
+    "detail": "skew=5.3263, kurtosis=48.8880"
   },
   "anomalies": {
-    "n_detected": 91,
+    "n_detected": 57,
     "alpha": 0.05,
     "correction": "Benjamini-Hochberg"
   },
+  "anomaly_classification": {
+    "flash_crash": 52,
+    "wash_trade": 0,
+    "latency_gap": 5,
+    "unclassified": 0
+  },
   "granger_network": {
-    "n_edges": 0,
+    "n_edges": 56,
     "n_nodes": 8,
-    "strongest_f_stat": 4.342,
+    "strongest_f_stat": 2.5076,
     "strongest_pair": [
-      5,
+      2,
       4
     ],
     "adjacency": [
       [
         0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
       ],
       [
+        1,
         0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
       ],
       [
+        1,
+        1,
         0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0
+        1,
+        1,
+        1,
+        1,
+        1
       ],
       [
+        1,
+        1,
+        1,
         0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0
+        1,
+        1,
+        1,
+        1
       ],
       [
+        1,
+        1,
+        1,
+        1,
         0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0
+        1,
+        1,
+        1
       ],
       [
+        1,
+        1,
+        1,
+        1,
+        1,
         0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0
+        1,
+        1
       ],
       [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
         0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0
+        1
       ],
       [
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
         0
       ]
     ]
   },
   "portfolio": {
     "weights": [
-      0.046265,
+      0.203608,
+      0.0,
+      0.384632,
+      0.248931,
       0.0,
       0.0,
-      0.0,
-      0.081996,
-      0.444187,
-      0.0,
-      0.427553
+      0.009732,
+      0.153097
     ],
     "sum": 1.0
   },
+  "kronecker_covariance": {
+    "A_shape": [
+      4,
+      4
+    ],
+    "B_shape": [
+      2,
+      2
+    ],
+    "approx_error": 0.000156,
+    "A_diag": [
+      -0.027032,
+      -0.027038,
+      -0.027028,
+      -0.027033
+    ]
+  },
+  "forecast_validation": {
+    "test_steps": 103,
+    "train_steps": 409,
+    "forecast_rmse": 128479.658424,
+    "per_asset_rmse": [
+      128387.412002,
+      128120.884422,
+      128475.610766,
+      128333.965048,
+      128939.420413,
+      128803.263866,
+      128669.341102,
+      128104.836126
+    ]
+  },
+  "tensor_info": {
+    "multilinear_rank": [
+      2,
+      128,
+      256
+    ]
+  },
   "backtest": {
     "n_windows": 5,
-    "mean_rmse": 29.475426,
-    "std_rmse": 1.887661,
-    "worst_rmse": 32.857123,
-    "best_rmse": 27.394182,
-    "overfit_ratio": 0.8661,
+    "mean_rmse": 4.101748,
+    "std_rmse": 1.41615,
+    "worst_rmse": 6.695973,
+    "best_rmse": 2.870851,
+    "overfit_ratio": 1.1493,
     "per_window": [
-      32.857123,
-      27.394182,
-      28.882895,
-      29.972107,
-      28.27082
+      4.520213,
+      3.111384,
+      6.695973,
+      2.870851,
+      3.310319
     ]
   },
   "reconstruction_per_asset_rmse": {
-    "SYN0": 35.370011,
-    "SYN1": 31.06531,
-    "SYN2": 31.991031,
-    "SYN3": 33.710685,
-    "SYN4": 30.03871,
-    "SYN5": 33.520422,
-    "SYN6": 33.483518,
-    "SYN7": 32.998982
+    "SYN0": 3.212058,
+    "SYN1": 3.41955,
+    "SYN2": 3.443619,
+    "SYN3": 3.348469,
+    "SYN4": 2.935165,
+    "SYN5": 3.081127,
+    "SYN6": 3.441047,
+    "SYN7": 3.482801
   },
-  "overall_rmse": 32.772334,
+  "overall_rmse": 3.295479,
   "data_config": {
     "source": "Synthetic",
     "n_assets": 8,

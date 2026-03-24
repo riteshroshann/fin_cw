@@ -203,3 +203,170 @@ def frobenius(A: NDArray) -> float:
 def spectral_norm(A: NDArray) -> float:
     """Spectral norm ‖A‖₂ = σ_max."""
     return float(np.linalg.norm(np.asarray(A), 2))
+
+
+# ──────────────────────────────────────────────────────────────
+#  Tensor operations (mode-n unfolding / folding)
+# ──────────────────────────────────────────────────────────────
+
+def tensor_unfold(T: NDArray, mode: int) -> NDArray:
+    """Mode-n unfolding (matricization) of a 3-D tensor.
+
+    For T ∈ ℝ^{I₁×I₂×I₃}, mode-n unfolding produces a matrix by
+    arranging the mode-n fibers as columns.
+
+    Parameters
+    ----------
+    T    : 3-D array of shape (I1, I2, I3)
+    mode : unfolding mode (0, 1, or 2)
+
+    Returns
+    -------
+    M : 2-D array — mode-n unfolding of T
+    """
+    T = np.asarray(T)
+    ndim = T.ndim
+    if ndim != 3:
+        raise ValueError(f"tensor_unfold requires a 3-D tensor, got {ndim}-D")
+    # Move target mode to axis 0, then reshape
+    axes = [mode] + [i for i in range(ndim) if i != mode]
+    return np.transpose(T, axes).reshape(T.shape[mode], -1)
+
+
+def tensor_fold(M: NDArray, mode: int, shape: tuple[int, ...]) -> NDArray:
+    """Inverse of tensor_unfold — fold a matrix back into a 3-D tensor.
+
+    Parameters
+    ----------
+    M     : 2-D matrix (mode-n unfolding)
+    mode  : which mode was unfolded
+    shape : original tensor shape (I1, I2, I3)
+
+    Returns
+    -------
+    T : 3-D tensor of given shape
+    """
+    ndim = len(shape)
+    if ndim != 3:
+        raise ValueError(f"tensor_fold requires 3-D shape, got {ndim}-D")
+    axes_order = [mode] + [i for i in range(ndim) if i != mode]
+    new_shape = tuple(shape[a] for a in axes_order)
+    T = M.reshape(new_shape)
+    # Invert the transposition
+    inv_axes = [0] * ndim
+    for i, a in enumerate(axes_order):
+        inv_axes[a] = i
+    return np.transpose(T, inv_axes)
+
+
+def tensor_n_mode_product(T: NDArray, M: NDArray, mode: int) -> NDArray:
+    """n-mode product of a 3-D tensor with a matrix.
+
+    (T ×_n M) is computed by unfolding along mode n, multiplying, and refolding.
+    """
+    T_unf = tensor_unfold(T, mode)
+    result_unf = M @ T_unf
+    new_shape = list(T.shape)
+    new_shape[mode] = M.shape[0]
+    return tensor_fold(result_unf, mode, tuple(new_shape))
+
+
+def multilinear_rank(T: NDArray) -> tuple[int, ...]:
+    """Compute the multilinear rank (Tucker rank) of a 3-D tensor.
+
+    Returns (rank_0, rank_1, rank_2) where rank_n = rank(unfold_n(T)).
+    """
+    ranks = []
+    for mode in range(T.ndim):
+        M = tensor_unfold(T, mode)
+        s = np.linalg.svd(M, compute_uv=False)
+        r = int(np.sum(s > s[0] * 1e-10))
+        ranks.append(r)
+    return tuple(ranks)
+
+
+# ──────────────────────────────────────────────────────────────
+#  Shift-matrix lag analysis
+# ──────────────────────────────────────────────────────────────
+
+def shift_lag_analysis(
+    X: NDArray,
+    max_lag: int = 10,
+) -> tuple[NDArray, NDArray]:
+    """Analyse cross-correlation structure via shift-matrix operators.
+
+    For a multi-asset matrix X ∈ ℝ^{n×T}, computes lag-k auto-correlation
+    matrices  R(k) = (1/T) · X · S_k^T · X^T  for k = 0, 1, ..., max_lag.
+
+    The shift matrix S_k acts as a discrete lag operator, expressing the
+    temporal dependence structure in operator-theoretic form.
+
+    Parameters
+    ----------
+    X       : (n, T) time-series matrix
+    max_lag : number of lags to compute
+
+    Returns
+    -------
+    lags            : (max_lag+1,) lag indices
+    autocorr_norms  : (max_lag+1,) Frobenius norm ‖R(k)‖_F at each lag
+    """
+    X = np.asarray(X, dtype=np.float64)
+    n, T = X.shape
+    max_lag = min(max_lag, T - 1)
+
+    lags = np.arange(max_lag + 1)
+    norms = np.zeros(max_lag + 1)
+
+    for k in range(max_lag + 1):
+        # R(k) = (1/T) * X[:, k:] @ X[:, :T-k].T — efficient computation
+        # avoids building the full T×T shift matrix
+        valid = T - k
+        if valid < 1:
+            break
+        R_k = X[:, k:] @ X[:, :valid].T / valid
+        norms[k] = float(np.linalg.norm(R_k, 'fro'))
+
+    return lags, norms
+
+
+def nearest_kronecker_product(
+    Sigma: NDArray,
+    m: int,
+    n: int,
+) -> tuple[NDArray, NDArray]:
+    """Nearest Kronecker product decomposition  Σ ≈ A ⊗ B.
+
+    Uses the Van Loan & Pitsianis rearrangement lemma:
+    reshape Σ into a (m²×n²) matrix, then take rank-1 SVD to extract
+    the best A ∈ ℝ^{m×m} and B ∈ ℝ^{n×n}.
+
+    Parameters
+    ----------
+    Sigma : (m*n, m*n) matrix to approximate
+    m, n  : block dimensions such that Σ ≈ A_{m×m} ⊗ B_{n×n}
+
+    Returns
+    -------
+    A : (m, m) inter-block (sector) factor
+    B : (n, n) intra-block factor
+    """
+    Sigma = np.asarray(Sigma, dtype=np.float64)
+    mn = m * n
+    assert Sigma.shape == (mn, mn), f"Expected {(mn, mn)}, got {Sigma.shape}"
+
+    # Rearrangement: build the (m², n²) matrix R
+    R = np.zeros((m * m, n * n), dtype=np.float64)
+    for i in range(m):
+        for j in range(m):
+            block = Sigma[i * n:(i + 1) * n, j * n:(j + 1) * n]
+            R[i * m + j, :] = block.ravel()
+
+    # Rank-1 SVD
+    U, s, Vt = np.linalg.svd(R, full_matrices=False)
+    # A = reshape(√σ₁ · u₁, (m, m)),  B = reshape(√σ₁ · v₁, (n, n))
+    sqrt_s = np.sqrt(s[0])
+    A = (sqrt_s * U[:, 0]).reshape(m, m)
+    B = (sqrt_s * Vt[0, :]).reshape(n, n)
+
+    return A, B

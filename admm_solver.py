@@ -121,9 +121,20 @@ def admm_rpca(
         hist.rank.append(rank_k)
         hist.objective.append(obj)
 
+        # ── Adaptive ρ-scaling (Boyd et al. §3.4.1) ──
+        # Balance primal and dual convergence rates by adjusting ρ
+        _tau = 2.0
+        _mu_adapt = 10.0
+        if primal_res > _mu_adapt * dual_res:
+            rho *= _tau
+            Y *= (1.0 / _tau)  # rescale dual to maintain Y/ρ invariant
+        elif dual_res > _mu_adapt * primal_res:
+            rho /= _tau
+            Y *= _tau
+
         if verbose and k % 20 == 0:
             print(f"  ADMM iter {k:4d} | primal {primal_res:.2e} | "
-                  f"dual {dual_res:.2e} | rank {rank_k}")
+                  f"dual {dual_res:.2e} | rank {rank_k} | ρ {rho:.4f}")
 
         if primal_res < tol and dual_res < tol:
             break
@@ -206,3 +217,103 @@ def admm_matrix_completion(
 
     hist.iterations = k + 1
     return Z, hist
+
+
+# ──────────────────────────────────────────────────────────────
+#  Iterative Hankel-ADMM Coupling
+# ──────────────────────────────────────────────────────────────
+
+def iterative_hankel_admm(
+    M: NDArray,
+    Omega: NDArray | None = None,
+    L: int | None = None,
+    ssa_rank: int | None = None,
+    lam: float | None = None,
+    rho: float = 1.5,
+    admm_max_iter: int = 200,
+    admm_tol: float = 1e-5,
+    outer_iters: int = 3,
+    outer_tol: float = 1e-4,
+) -> tuple[NDArray, NDArray, ADMMHistory, list[float]]:
+    """Iterative Hankel-SSA ↔ ADMM-RPCA coupling.
+
+    Unlike a single serial pass (SSA → ADMM), this alternates between:
+      1) Hankel-SSA reconstruction (impute + denoise via rank constraint)
+      2) ADMM-RPCA decomposition   (low-rank + sparse separation)
+
+    feeding the ADMM low-rank output back into SSA for refinement.
+    The outer loop converges when the Frobenius-norm change in the
+    low-rank component falls below `outer_tol`.
+
+    Parameters
+    ----------
+    M         : (n_assets, T) raw data (may contain NaN)
+    Omega     : observation mask (True = observed)
+    L         : Hankel embedding window length
+    ssa_rank  : SSA truncation rank per asset
+    lam       : ADMM sparse penalty
+    rho       : initial ADMM penalty parameter
+    admm_max_iter : ADMM iteration cap per outer step
+    admm_tol  : ADMM inner convergence tolerance
+    outer_iters : maximum outer iterations
+    outer_tol : convergence threshold on ‖X_new - X_old‖_F / ‖X_old‖_F
+
+    Returns
+    -------
+    X_clean      : (n_assets, T) low-rank component
+    S_anomaly    : (n_assets, T) sparse anomaly component
+    admm_hist    : ADMMHistory from the final inner ADMM run
+    outer_deltas : list of per-outer-iteration relative change values
+    """
+    from hankel_pipeline import multi_asset_hankel
+
+    M = np.asarray(M, dtype=np.float64)
+    n, T = M.shape
+
+    if Omega is None:
+        Omega = ~np.isnan(M)
+
+    if L is None:
+        L = max(2, T // 4)
+
+    # Initialise: first SSA pass
+    X_ssa = multi_asset_hankel(M, L=L, rank=ssa_rank)
+
+    outer_deltas: list[float] = []
+    X_prev = np.zeros_like(M)
+    S_hat = np.zeros_like(M)
+    hist = ADMMHistory()
+
+    for outer_k in range(outer_iters):
+        # ADMM-RPCA on the SSA-smoothed matrix
+        X_hat, S_hat, hist = admm_rpca(
+            X_ssa,
+            Omega=Omega,
+            lam=lam,
+            rho=rho,
+            max_iter=admm_max_iter,
+            tol=admm_tol,
+        )
+
+        # Convergence check on the low-rank component
+        delta_norm = frobenius(X_hat - X_prev)
+        ref_norm = max(frobenius(X_prev), 1e-10)
+        relative_delta = delta_norm / ref_norm
+        outer_deltas.append(relative_delta)
+
+        if outer_k > 0 and relative_delta < outer_tol:
+            break
+
+        X_prev = X_hat.copy()
+
+        # Re-inject ADMM low-rank output into SSA for next round
+        # Replace observed-but-anomalous entries with ADMM estimate,
+        # keep original observations where no anomaly was detected
+        M_refined = M.copy()
+        anomaly_mask = np.abs(S_hat) > np.std(S_hat) * 0.5
+        M_refined[anomaly_mask & Omega] = X_hat[anomaly_mask & Omega]
+        M_refined[~Omega] = X_hat[~Omega]  # fill missing with current estimate
+
+        X_ssa = multi_asset_hankel(M_refined, L=L, rank=ssa_rank)
+
+    return X_hat, S_hat, hist, outer_deltas

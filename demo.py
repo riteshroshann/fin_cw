@@ -46,6 +46,10 @@ from viz_forensics import (
     plot_multi_asset_reconstruction,
     plot_granger_network,
     plot_backtest_rmse,
+    plot_qq_residuals,
+    plot_forecast_comparison,
+    plot_kronecker_spectrum,
+    plot_cumulative_pnl,
 )
 
 
@@ -336,6 +340,90 @@ def main() -> None:
     # Refresh report to include Granger data
     report = engine.generate_report()
 
+    # ── Kronecker Covariance Estimation ──
+    _section("Kronecker Covariance Estimation (Σ ≈ A ⊗ B)")
+
+    _status("Fitting nearest Kronecker product")
+    t0 = time.perf_counter()
+    try:
+        A_kron, B_kron = engine.estimate_kronecker_covariance()
+        _done(time.perf_counter() - t0)
+        _kv("A shape (inter-sector)", f"{A_kron.shape}")
+        _kv("B shape (intra-sector)", f"{B_kron.shape}")
+        _kv("Relative approx error", f"{engine.kronecker_approx_error:.6f}")
+        _kv("A diagonal", f"{np.diag(A_kron).round(4).tolist()}")
+    except Exception as e:
+        _done(time.perf_counter() - t0)
+        _kv("Kronecker estimation", f"Skipped ({e})")
+
+    # ── Anomaly Classification ──
+    _section("Anomaly Classification")
+    ac = engine.anomaly_classification
+    if ac is not None:
+        _kv("Flash-crash (isolated spikes)", ac.flash_crash)
+        _kv("Wash-trade (consecutive runs)", ac.wash_trade)
+        _kv("Latency-gap (flat blocks)", ac.latency_gap)
+        _kv("Unclassified", ac.unclassified)
+
+    # ── Bias-Variance Decomposition ──
+    bv = engine.bias_variance
+    if bv is not None:
+        _section("Reconstruction Bias-Variance Decomposition")
+        _kv("MSE", f"{bv['mse']:.6f}")
+        _kv("Bias²", f"{bv['bias_squared']:.6f}")
+        _kv("Variance", f"{bv['variance']:.6f}")
+
+    # ── Tensor Structure Analysis ──
+    _section("Tensor Structure Analysis")
+    _status("Computing multilinear rank of Hankel tensor")
+    t0 = time.perf_counter()
+    engine.analyze_tensor_structure()
+    _done(time.perf_counter() - t0)
+    if engine.tensor_ranks is not None:
+        _kv("Multilinear rank", f"{engine.tensor_ranks}")
+        _kv("Mode-0 (assets)", engine.tensor_ranks[0])
+        _kv("Mode-1 (lag window)", engine.tensor_ranks[1])
+        _kv("Mode-2 (trajectory)", engine.tensor_ranks[2])
+
+    # ── Shift-Matrix Lag Analysis ──
+    _status("Running shift-matrix lag analysis")
+    t0 = time.perf_counter()
+    engine.analyze_lag_structure()
+    _done(time.perf_counter() - t0)
+    if engine.lag_analysis is not None:
+        lags, norms = engine.lag_analysis
+        _kv("Lag-0 autocorr norm", f"{norms[0]:.4f}")
+        _kv("Lag-1 autocorr norm", f"{norms[1]:.4f}")
+        _kv("Decay ratio (lag1/lag0)", f"{norms[1]/max(norms[0],1e-10):.4f}")
+
+    # ── Forecast Validation ──
+    _section("DMD Forecast Validation (80/20 split)")
+    _status("Running DMD forecast validation")
+    t0 = time.perf_counter()
+    fv = engine.validate_forecast(test_fraction=0.2)
+    _done(time.perf_counter() - t0)
+    if "error" not in fv:
+        _kv("Train steps", fv["train_steps"])
+        _kv("Test steps", fv["test_steps"])
+        _kv("Forecast RMSE", f"{fv['forecast_rmse']:.6f}")
+        for i, rmse in enumerate(fv.get("per_asset_rmse", [])):
+            name = asset_names[i] if i < len(asset_names) else f"A{i}"
+            _kv(f"  {name} forecast RMSE", f"{rmse:.6f}", _D)
+    else:
+        _kv("Forecast", f"Skipped ({fv['error']})")
+
+    # ── Iterative Coupling Report ──
+    if engine.outer_deltas:
+        _section("Iterative Hankel-ADMM Coupling")
+        for k, delta in enumerate(engine.outer_deltas):
+            _kv(f"  Outer iteration {k}", f"Δ = {delta:.6f}")
+        converged = len(engine.outer_deltas) < 3 or engine.outer_deltas[-1] < 1e-4
+        _kv("Converged", "Yes" if converged else "No",
+            _GR if converged else _RD)
+
+    # Refresh report with all new data
+    report = engine.generate_report()
+
     # ── Results Report ──
     _section("Results Report")
     _kv("Data source", data_source, _CY)
@@ -460,6 +548,36 @@ def main() -> None:
         path = plot_granger_network(
             engine.granger_adj, engine.granger_fstats,
             asset_names=asset_names,
+        )
+        _done(0)
+        _kv("Saved", path, _D)
+
+    # Q-Q residual plot
+    residuals = (engine.X_ssa - engine.X_clean).ravel()
+    _status("Residual Q-Q plot")
+    path = plot_qq_residuals(residuals)
+    _done(0)
+    _kv("Saved", path, _D)
+
+    # Cumulative PnL
+    _status("Cumulative PnL equity curve")
+    path = plot_cumulative_pnl(engine.X_clean, w_after)
+    _done(0)
+    _kv("Saved", path, _D)
+
+    # Kronecker spectrum
+    if engine.kronecker_A is not None:
+        _status("Kronecker factor spectrum")
+        path = plot_kronecker_spectrum(engine.kronecker_A, engine.kronecker_B)
+        _done(0)
+        _kv("Saved", path, _D)
+
+    # Forecast comparison
+    fv = engine.forecast_validation
+    if fv is not None and "error" not in fv:
+        _status("DMD forecast comparison")
+        path = plot_forecast_comparison(
+            fv["X_test"], fv["X_forecast"], n_show=min(4, n_assets),
         )
         _done(0)
         _kv("Saved", path, _D)

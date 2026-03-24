@@ -85,8 +85,13 @@ def jarque_bera_test(
 
     jb = n / 6.0 * (S ** 2 + K ** 2 / 4.0)
 
-    # χ²(2) survival function approximation via incomplete gamma
-    p_value = float(np.exp(-jb / 2.0) * (1 + jb / 2.0))
+    # Proper χ²(2) survival function
+    try:
+        from scipy.stats import chi2
+        p_value = float(chi2.sf(jb, df=2))
+    except ImportError:
+        # Fallback: χ²(2) sf = exp(-x/2), exact for 2 degrees of freedom
+        p_value = float(np.exp(-jb / 2.0))
     p_value = min(max(p_value, 0.0), 1.0)
 
     return TestResult(
@@ -173,33 +178,30 @@ def granger_causality_f_test(
 
 
 def _f_survival(f: float, d1: int, d2: int) -> float:
-    """Approximate upper-tail probability of F(d1, d2).
+    """Upper-tail probability of F(d1, d2).
 
-    Uses the regularised incomplete beta function relation:
-        P(F > f) = I_{d2/(d2+d1*f)}(d2/2, d1/2)
-
-    Falls back to a simple Gaussian approximation for large df.
+    Uses scipy.stats.f.sf for exact computation. Falls back to
+    Abramowitz & Stegun §26.9.2 normal approximation if scipy
+    is unavailable.
     """
     if f <= 0:
         return 1.0
-    x = d2 / (d2 + d1 * f)
-    # Log-beta via Stirling for moderate df
     try:
-        from math import lgamma, exp
-        a, b = d2 / 2.0, d1 / 2.0
-        # Approximate I_x(a,b) via continued fraction is complex;
-        # use a rough normal approximation instead.
-        # Abramowitz & Stegun 26.9.2: F → z transform
+        from scipy.stats import f as f_dist
+        return float(f_dist.sf(f, d1, d2))
+    except ImportError:
+        pass
+    # Fallback: Abramowitz & Stegun normal approximation
+    try:
+        from math import erfc
         z = (f ** (1.0 / 3.0) * (1 - 2.0 / (9 * d2))
              - (1 - 2.0 / (9 * d1))) / (
             (2.0 / (9 * d1) + f ** (2.0 / 3.0) * 2.0 / (9 * d2)) ** 0.5 + 1e-15
         )
-        # Φ(-z) via error function
-        from math import erfc
         p = 0.5 * erfc(z / 2 ** 0.5)
         return max(min(p, 1.0), 0.0)
     except Exception:
-        return 0.5  # fallback
+        return 0.5
 
 
 # ──────────────────────────────────────────────────────────────
@@ -292,3 +294,132 @@ def multiple_testing_correction(
         raise ValueError(f"Unknown correction method: {method}")
 
     return adjusted, reject
+
+
+# ──────────────────────────────────────────────────────────────
+#  Anomaly Classification
+# ──────────────────────────────────────────────────────────────
+
+@dataclass
+class AnomalyClassification:
+    """Classification of detected anomalies by temporal signature."""
+    flash_crash: int = 0           # isolated spikes (single-entry)
+    wash_trade: int = 0            # flat plateaus (consecutive entries)
+    latency_gap: int = 0           # clustered missing (NaN blocks)
+    unclassified: int = 0
+    per_asset: dict = None         # type: ignore
+
+    def __post_init__(self):
+        if self.per_asset is None:
+            self.per_asset = {}
+
+
+def classify_anomalies(
+    S: NDArray,
+    significant_mask: NDArray,
+    run_length_threshold: int = 3,
+) -> AnomalyClassification:
+    """Classify significant anomalies by their spatio-temporal pattern.
+
+    Classification rules:
+        - flash_crash: isolated significant entries (≤2 consecutive)
+        - wash_trade: runs of ≥ `run_length_threshold` consecutive
+                      significant entries along the time axis
+        - latency_gap: runs where the magnitude is near-constant
+                       (std/mean < 0.1), suggesting missing-data artefacts
+
+    Parameters
+    ----------
+    S                     : (n, T) sparse anomaly matrix
+    significant_mask      : (n, T) boolean mask from BH correction
+    run_length_threshold  : minimum consecutive entries for wash-trade
+
+    Returns
+    -------
+    AnomalyClassification with counts and per-asset breakdown
+    """
+    S = np.asarray(S)
+    significant_mask = np.asarray(significant_mask, dtype=bool)
+    n, T = S.shape
+
+    result = AnomalyClassification()
+
+    for i in range(n):
+        row_mask = significant_mask[i]
+        row_S = np.abs(S[i])
+        asset_counts = {"flash_crash": 0, "wash_trade": 0, "latency_gap": 0}
+
+        # Find runs of consecutive significant entries
+        j = 0
+        while j < T:
+            if not row_mask[j]:
+                j += 1
+                continue
+            # Start of a run
+            run_start = j
+            while j < T and row_mask[j]:
+                j += 1
+            run_len = j - run_start
+            run_vals = row_S[run_start:j]
+
+            if run_len >= run_length_threshold:
+                # Check if flat (wash-trade) or variable
+                run_mean = np.mean(run_vals)
+                run_std = np.std(run_vals)
+                if run_mean > 1e-12 and run_std / run_mean < 0.1:
+                    asset_counts["latency_gap"] += run_len
+                    result.latency_gap += run_len
+                else:
+                    asset_counts["wash_trade"] += run_len
+                    result.wash_trade += run_len
+            else:
+                asset_counts["flash_crash"] += run_len
+                result.flash_crash += run_len
+
+        result.per_asset[i] = asset_counts
+
+    result.unclassified = max(
+        0, int(np.sum(significant_mask)) - result.flash_crash
+        - result.wash_trade - result.latency_gap
+    )
+    return result
+
+
+# ──────────────────────────────────────────────────────────────
+#  Reconstruction Bias-Variance Decomposition
+# ──────────────────────────────────────────────────────────────
+
+def reconstruction_bias_variance(
+    x_true: NDArray,
+    x_hat: NDArray,
+    n_bootstrap: int = 2000,
+    seed: int = 42,
+) -> dict[str, float]:
+    """Bootstrap decomposition of MSE into bias² + variance.
+
+    Uses the identity: MSE = Bias² + Var(x̂) + irreducible noise.
+
+    Returns
+    -------
+    dict with keys: 'mse', 'bias_squared', 'variance', 'rmse'
+    """
+    x_true = np.asarray(x_true).ravel()
+    x_hat = np.asarray(x_hat).ravel()
+    n = x_true.size
+
+    rng = np.random.default_rng(seed)
+    boot_means = np.zeros(n_bootstrap)
+    for b in range(n_bootstrap):
+        idx = rng.integers(0, n, n)
+        boot_means[b] = np.mean(x_hat[idx])
+
+    bias = float(np.mean(x_hat) - np.mean(x_true))
+    variance = float(np.var(boot_means))
+    mse = float(np.mean((x_true - x_hat) ** 2))
+
+    return {
+        "mse": mse,
+        "bias_squared": bias ** 2,
+        "variance": variance,
+        "rmse": float(np.sqrt(mse)),
+    }

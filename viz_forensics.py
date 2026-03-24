@@ -466,3 +466,166 @@ def plot_backtest_rmse(
     fig.savefig(path)
     plt.close(fig)
     return path
+
+
+# ──────────────────────────────────────────────────────────────
+#  10. Residual Q-Q plot
+# ──────────────────────────────────────────────────────────────
+
+def plot_qq_residuals(
+    residuals: NDArray,
+    filename: str = "qq_residuals.png",
+) -> str:
+    """Normal Q-Q plot for residual diagnostics."""
+    out = _ensure_dir()
+    r = np.asarray(residuals).ravel()
+    r = r[np.isfinite(r)]
+    r_sorted = np.sort(r)
+    n = len(r_sorted)
+
+    # Theoretical quantiles from standard normal
+    probs = (np.arange(1, n + 1) - 0.5) / n
+    from scipy.stats import norm
+    theoretical = norm.ppf(probs)
+
+    fig, ax = plt.subplots(figsize=(7, 7))
+    ax.scatter(theoretical, r_sorted, c=PALETTE[3], s=6, alpha=0.5, edgecolors="none")
+
+    # Reference line (45°)
+    lo = min(theoretical.min(), r_sorted.min())
+    hi = max(theoretical.max(), r_sorted.max())
+    ax.plot([lo, hi], [lo, hi], color=PALETTE[4], lw=1.5, ls="--", alpha=0.7, label="y = x")
+
+    ax.set_xlabel("Theoretical Quantiles (Normal)")
+    ax.set_ylabel("Sample Quantiles")
+    ax.set_title("Residual Normal Q-Q Plot", fontsize=13, fontweight="bold")
+    ax.legend(framealpha=0.3)
+    ax.grid(True, ls=":", alpha=0.3)
+    ax.set_aspect("equal", adjustable="datalim")
+
+    fig.tight_layout()
+    path = str(out / filename)
+    fig.savefig(path)
+    plt.close(fig)
+    return path
+
+
+# ──────────────────────────────────────────────────────────────
+#  11. Forecast comparison
+# ──────────────────────────────────────────────────────────────
+
+def plot_forecast_comparison(
+    X_actual: NDArray,
+    X_forecast: NDArray,
+    n_show: int = 4,
+    filename: str = "forecast_comparison.png",
+) -> str:
+    """DMD forecast vs actuals with shaded error band."""
+    out = _ensure_dir()
+    n = min(n_show, X_actual.shape[0])
+    fig, axes = plt.subplots(n, 1, figsize=(14, 3 * n), sharex=True)
+    if n == 1:
+        axes = [axes]
+
+    t = np.arange(X_actual.shape[1])
+    for i, ax in enumerate(axes):
+        actual = X_actual[i]
+        forecast = X_forecast[i]
+        error = np.abs(actual - forecast)
+
+        ax.plot(t, actual, color=PALETTE[0], lw=1.5, alpha=0.85, label="Actual")
+        ax.plot(t, forecast, color=PALETTE[1], lw=1.3, ls="--", alpha=0.9, label="DMD Forecast")
+        ax.fill_between(t, forecast - error, forecast + error,
+                        alpha=0.1, color=PALETTE[1], label="Error band")
+        ax.set_ylabel(f"Asset {i}")
+        ax.grid(True, ls=":", alpha=0.3)
+        if i == 0:
+            ax.legend(loc="upper right", framealpha=0.3, fontsize=8)
+
+    axes[-1].set_xlabel("Time step (out-of-sample)")
+    fig.suptitle("DMD Forecast vs Actuals", fontsize=14, fontweight="bold", y=1.01)
+    fig.tight_layout()
+
+    path = str(out / filename)
+    fig.savefig(path)
+    plt.close(fig)
+    return path
+
+
+# ──────────────────────────────────────────────────────────────
+#  12. Kronecker factor spectrum
+# ──────────────────────────────────────────────────────────────
+
+def plot_kronecker_spectrum(
+    A: NDArray,
+    B: NDArray,
+    filename: str = "kronecker_spectrum.png",
+) -> str:
+    """Singular value spectrum of Kronecker factors A and B."""
+    out = _ensure_dir()
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+    for ax, mat, name, color in [
+        (axes[0], A, "A (inter-sector)", PALETTE[0]),
+        (axes[1], B, "B (intra-sector)", PALETTE[2]),
+    ]:
+        s = np.linalg.svd(mat, compute_uv=False)
+        ax.bar(np.arange(len(s)), s, color=color, alpha=0.85, edgecolor="#30363d", lw=0.5)
+        ax.set_xlabel("Index")
+        ax.set_ylabel("Singular Value")
+        ax.set_title(f"Factor {name}", fontsize=12, fontweight="bold")
+        ax.grid(True, ls=":", axis="y", alpha=0.4)
+
+    fig.suptitle("Kronecker Covariance Factor Spectrum", fontsize=14, fontweight="bold")
+    fig.tight_layout()
+
+    path = str(out / filename)
+    fig.savefig(path)
+    plt.close(fig)
+    return path
+
+
+# ──────────────────────────────────────────────────────────────
+#  13. Cumulative PnL simulation
+# ──────────────────────────────────────────────────────────────
+
+def plot_cumulative_pnl(
+    X_clean: NDArray,
+    weights: NDArray,
+    filename: str = "cumulative_pnl.png",
+) -> str:
+    """Simulated equity curve from portfolio weights on cleaned returns."""
+    out = _ensure_dir()
+    prices = np.maximum(X_clean, 1e-8)
+    log_returns = np.diff(np.log(prices), axis=1)
+
+    # Portfolio return at each time step
+    portfolio_returns = log_returns.T @ weights
+    cumulative_pnl = np.cumsum(portfolio_returns)
+
+    # Equal-weight baseline
+    ew_weights = np.ones(X_clean.shape[0]) / X_clean.shape[0]
+    ew_returns = log_returns.T @ ew_weights
+    ew_cumulative = np.cumsum(ew_returns)
+
+    fig, ax = plt.subplots(figsize=(14, 5))
+    t = np.arange(len(cumulative_pnl))
+
+    ax.plot(t, cumulative_pnl * 100, color=PALETTE[2], lw=1.8, alpha=0.9,
+            label="Optimised Portfolio")
+    ax.plot(t, ew_cumulative * 100, color=PALETTE[0], lw=1.2, ls="--", alpha=0.7,
+            label="Equal-Weight Baseline")
+    ax.fill_between(t, 0, cumulative_pnl * 100, alpha=0.08, color=PALETTE[2])
+
+    ax.axhline(0, color="#30363d", lw=0.8)
+    ax.set_xlabel("Time step")
+    ax.set_ylabel("Cumulative Log-Return (%)")
+    ax.set_title("Portfolio Equity Curve (Cleaned Covariance)", fontsize=13, fontweight="bold")
+    ax.legend(framealpha=0.3, fontsize=9)
+    ax.grid(True, ls=":", alpha=0.4)
+
+    fig.tight_layout()
+    path = str(out / filename)
+    fig.savefig(path)
+    plt.close(fig)
+    return path
